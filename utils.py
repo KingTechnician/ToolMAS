@@ -56,8 +56,12 @@ def extract_markdown_python_block(text: str) -> Optional[str]:
 
 
 # to run python
+import io
+import sys
 import traceback
 from multiprocessing import Process, Manager
+
+
 def run_with_timeout(code, timeout):
     def worker(ns, code):
         try:
@@ -78,4 +82,35 @@ def run_with_timeout(code, timeout):
             ns['ok'] = False
             ns['error'] = f"TimeoutError: Execution exceeded {timeout} seconds"
         return ns.get('ok', False), ns.get('error', None)
+
+
+def run_python_with_stdout(code: str, timeout: int) -> str:
+    """Execute code and return captured stdout, or error traceback on failure."""
+    def worker(ns, code):
+        buf = io.StringIO()
+        try:
+            old_out, old_err = sys.stdout, sys.stderr
+            sys.stdout = sys.stderr = buf
+            exec(code, {})
+            sys.stdout, sys.stderr = old_out, old_err
+            ns['output'] = buf.getvalue()
+            ns['ok'] = True
+        except Exception:
+            try:
+                sys.stdout, sys.stderr = old_out, old_err
+            except Exception:
+                pass
+            ns['output'] = traceback.format_exc()
+            ns['ok'] = False
+
+    with Manager() as manager:
+        ns = manager.dict()
+        p = Process(target=worker, args=(ns, code))
+        p.start()
+        p.join(timeout)
+        if p.is_alive():
+            p.terminate()
+            return f"TimeoutError: Execution exceeded {timeout} seconds"
+        output = ns.get('output', '')
+        return output if output else ('(no output)' if ns.get('ok') else 'Error: unknown failure')
 

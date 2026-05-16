@@ -1,4 +1,34 @@
 
+def build_tool_mas_message(question: str, task: str):
+    system_prompt = """You are a helpful assistant that solves problems step by step.
+
+You have access to the following tool:
+
+**python_exec(code)** — Executes Python code and returns stdout or the error traceback.
+
+To call the tool, output EXACTLY this format (nothing else on the line):
+<tool_call>python_exec(YOUR_CODE_HERE)</tool_call>
+
+Rules:
+- Use the tool when arithmetic, computation, or code execution would help.
+- You may call the tool multiple times.
+- When you have the final answer, do NOT emit a tool call — just write your answer.
+- For math questions: put your final answer inside \\boxed{YOUR_ANSWER}.
+- For multiple-choice questions: put your final answer inside \\boxed{A} (or B/C/D).
+- For coding questions: put your final Python function inside a ```python``` block.
+
+Example:
+User: What is 17 * 23?
+Assistant: I'll compute this.
+<tool_call>python_exec(print(17 * 23))</tool_call>
+The result is 391. \\boxed{391}"""
+
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": question},
+    ]
+
+
 def build_agent_message_sequential_latent_mas(role: str, question: str, context: str = "", method=None, args=None):
 
     system_message = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."

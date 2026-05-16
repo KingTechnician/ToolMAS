@@ -18,6 +18,7 @@ from data import (
 from methods.baseline import BaselineMethod
 from methods.latent_mas import LatentMASMethod
 from methods.text_mas import TextMASMethod
+from methods.tool_mas import ToolMASMethod
 from models import ModelWrapper
 from utils import auto_device, set_seed
 import time
@@ -85,8 +86,8 @@ def main():
     parser = argparse.ArgumentParser()
 
     # core args for experiments
-    parser.add_argument("--method", choices=["baseline", "text_mas", "latent_mas"], required=True,
-                        help="Which multi-agent method to run: 'baseline', 'text_mas', or 'latent_mas'.")
+    parser.add_argument("--method", choices=["baseline", "text_mas", "latent_mas", "tool_mas"], required=True,
+                        help="Which multi-agent method to run: 'baseline', 'text_mas', 'latent_mas', or 'tool_mas'.")
     parser.add_argument("--model_name", type=str, required=True,
                         choices=["Qwen/Qwen3-4B", "Qwen/Qwen3-4B", "Qwen/Qwen3-14B"],
                         help="Model choices to use for experiments (e.g. 'Qwen/Qwen3-14B').")
@@ -108,6 +109,14 @@ def main():
     parser.add_argument("--latent_space_realign", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
 
+    # tool_mas-specific args
+    parser.add_argument("--tool_max_iters", type=int, default=5,
+                        help="Max ReAct iterations for tool_mas method")
+    parser.add_argument("--tool_timeout", type=int, default=10,
+                        help="Seconds allowed per python_exec call in tool_mas")
+    parser.add_argument("--tool_latent_steps", type=int, default=-1,
+                        help="Latent steps for tool result digestion (-1 = use --latent_steps)")
+
     # vLLM support
     parser.add_argument("--use_vllm", action="store_true", help="Use vLLM backend for generation")
     parser.add_argument("--enable_prefix_caching", action="store_true", help="Enable prefix caching in vLLM for latent_mas")
@@ -119,8 +128,12 @@ def main():
     args = parser.parse_args()
     
     if args.method == "latent_mas" and args.use_vllm:
-        args.use_second_HF_model = True 
+        args.use_second_HF_model = True
         args.enable_prefix_caching = True
+
+    if args.method == "tool_mas" and args.generate_bs != 1:
+        print(f"[tool_mas] Forcing generate_bs=1 (was {args.generate_bs})")
+        args.generate_bs = 1
     
     set_seed(args.seed)
     device = auto_device(args.device)
@@ -157,7 +170,18 @@ def main():
             latent_steps=args.latent_steps,
             judger_max_new_tokens=args.max_new_tokens,
             **common_kwargs,
-            generate_bs=args.generate_bs, 
+            generate_bs=args.generate_bs,
+            args=args,
+        )
+    elif args.method == "tool_mas":
+        method = ToolMASMethod(
+            model,
+            latent_steps=args.latent_steps,
+            max_new_tokens=args.max_new_tokens,
+            **common_kwargs,
+            tool_max_iters=args.tool_max_iters,
+            tool_timeout=args.tool_timeout,
+            tool_latent_steps=args.tool_latent_steps,
             args=args,
         )
 
