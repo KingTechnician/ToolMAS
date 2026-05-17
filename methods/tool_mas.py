@@ -34,7 +34,7 @@ class ToolMASMethod:
         tool_max_iters: int = 5,
         tool_timeout: int = 10,
         tool_latent_steps: int = -1,
-	tool_use_cache: bool = False,
+        tool_use_cache: bool = False,
         args: argparse.Namespace = None,
     ) -> None:
         self.model = model
@@ -44,8 +44,10 @@ class ToolMASMethod:
         self.top_p = top_p
         self.tool_max_iters = tool_max_iters
         self.tool_timeout = tool_timeout
-	self.tool_use_cache = tool_use_cache
+        self.tool_use_cache = tool_use_cache
         # Allow separate latent step count for tool result digestion; fall back to latent_steps.
+        self.tool_latent_steps = tool_latent_steps if tool_latent_steps >= 0 else latent_steps
+        self.task = args.task if args else "gsm8k"
         self.tool_latent_steps = tool_latent_steps if tool_latent_steps >= 0 else latent_steps
         self.task = args.task if args else "gsm8k"
 
@@ -127,32 +129,40 @@ class ToolMASMethod:
                 "iter": iteration,
             })
 
-            # Digest tool result into latent KV cache.
-            result_text = f"<tool_result>{result}</tool_result>"
-            result_enc = self.model.tokenizer(
-                result_text,
-                return_tensors="pt",
-                add_special_tokens=False,
-            )
-            result_ids = result_enc["input_ids"].to(self.model.device)
-            result_mask = result_enc["attention_mask"].to(self.model.device)
+            if self.tool_use_cache:
+                # Digest tool result into latent KV cache.
+                result_text = f"<tool_result>{result}</tool_result>"
+                result_enc = self.model.tokenizer(
+                    result_text,
+                    return_tensors="pt",
+                    add_special_tokens=False,
+                )
+                result_ids = result_enc["input_ids"].to(self.model.device)
+                result_mask = result_enc["attention_mask"].to(self.model.device)
 
-            past_kv = self.model.generate_latent_batch(
-                result_ids,
-                attention_mask=result_mask,
-                latent_steps=self.tool_latent_steps,
-                past_key_values=past_kv,
-            )
+                past_kv = self.model.generate_latent_batch(
+                    result_ids,
+                    attention_mask=result_mask,
+                    latent_steps=self.tool_latent_steps,
+                    past_key_values=past_kv,
+                )
 
-            # Seed next text generation with a minimal newline token so
-            # generate_text_batch has a non-empty input to continue from.
-            cont_enc = self.model.tokenizer(
-                "\n",
-                return_tensors="pt",
-                add_special_tokens=False,
-            )
-            input_ids = cont_enc["input_ids"].to(self.model.device)
-            attention_mask = torch.ones_like(input_ids)
+                # Seed next text generation with a minimal newline token so
+                # generate_text_batch has a non-empty input to continue from.
+                cont_enc = self.model.tokenizer(
+                    "\n",
+                    return_tensors="pt",
+                    add_special_tokens=False,
+                )
+                input_ids = cont_enc["input_ids"].to(self.model.device)
+                attention_mask = torch.ones_like(input_ids)
+            else:
+                # Case 1: pass tool result as text in the next prompt, no cache
+                messages.append({"role": "tool", "content": result})
+                prompts, input_ids, attention_mask, _ = self.model.prepare_chat_batch(
+                    [messages], add_generation_prompt=True
+                )
+                past_kv = None
 
         else:
             # Exhausted iterations without a tool-free response — use last generated text.
