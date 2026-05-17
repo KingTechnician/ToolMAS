@@ -1,0 +1,14 @@
+[project]
+name = "toolmas"
+version = "0.1.0"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "transformers>=4.51.0",
+    "accelerate>=1.0.0",
+    "datasets>=3.0.0",
+    "numpy>=1.26.0",
+    "tqdm",
+    "matplotlib",
+    "torch",
+    "torchvision",
+]

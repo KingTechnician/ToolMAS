@@ -34,6 +34,7 @@ class ToolMASMethod:
         tool_max_iters: int = 5,
         tool_timeout: int = 10,
         tool_latent_steps: int = -1,
+	tool_use_cache: bool = False,
         args: argparse.Namespace = None,
     ) -> None:
         self.model = model
@@ -43,6 +44,7 @@ class ToolMASMethod:
         self.top_p = top_p
         self.tool_max_iters = tool_max_iters
         self.tool_timeout = tool_timeout
+	self.tool_use_cache = tool_use_cache
         # Allow separate latent step count for tool result digestion; fall back to latent_steps.
         self.tool_latent_steps = tool_latent_steps if tool_latent_steps >= 0 else latent_steps
         self.task = args.task if args else "gsm8k"

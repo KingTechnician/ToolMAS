@@ -116,6 +116,9 @@ def main():
                         help="Seconds allowed per python_exec call in tool_mas")
     parser.add_argument("--tool_latent_steps", type=int, default=-1,
                         help="Latent steps for tool result digestion (-1 = use --latent_steps)")
+    parser.add_argument("--tool_use_cache", action="store_true",
+                    help="Digest tool results into KV cache (Case 2). "
+                         "If omitted, tool results are passed as text in the next prompt (Case 1).")
 
     # vLLM support
     parser.add_argument("--use_vllm", action="store_true", help="Use vLLM backend for generation")
@@ -182,6 +185,7 @@ def main():
             tool_max_iters=args.tool_max_iters,
             tool_timeout=args.tool_timeout,
             tool_latent_steps=args.tool_latent_steps,
+            tool_use_cache=args.tool_use_cache,
             args=args,
         )
 

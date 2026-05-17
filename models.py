@@ -20,12 +20,15 @@ def _ensure_pad_token(tokenizer: AutoTokenizer) -> None:
             tokenizer.add_special_tokens({"pad_token": "<pad>"})
 
 
-def _past_length(past_key_values: Optional[Tuple]) -> int:
+def _past_length(past_key_values) -> int:
     if not past_key_values:
         return 0
+    # Newer transformers returns a DynamicCache object
+    if hasattr(past_key_values, 'get_seq_length'):
+        return past_key_values.get_seq_length()
+    # Legacy tuple-of-tuples format
     k = past_key_values[0][0]
     return k.shape[-2]
-
 
 class ModelWrapper:
     def __init__(self, model_name: str, device: torch.device, use_vllm: bool = False, args = None):
@@ -228,15 +231,8 @@ class ModelWrapper:
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids, device=self.device)
         prompt_lengths = attention_mask.sum(dim=1).tolist()
-        cache_position = None
         if past_key_values is not None:
             past_len = _past_length(past_key_values)
-            cache_position = torch.arange(
-                past_len,
-                past_len + input_ids.shape[-1],
-                dtype=torch.long,
-                device=self.device,
-            )
             if past_len > 0:
                 past_mask = torch.ones(
                     (attention_mask.shape[0], past_len),
@@ -255,7 +251,6 @@ class ModelWrapper:
             return_dict_in_generate=True,
             output_scores=False,
             past_key_values=past_key_values,
-            cache_position=cache_position,
         )
         sequences = outputs.sequences
         generations: List[str] = []
